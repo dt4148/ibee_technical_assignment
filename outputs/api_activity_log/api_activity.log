@@ -1,0 +1,26 @@
+2025-07-01 23:49:10,644 - INFO - Database initialized (or already exists).
+2025-07-01 23:49:15,423 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/docs, QueryParams={}
+2025-07-01 23:49:15,424 - INFO - Response: Path=/docs, Status=200
+2025-07-01 23:49:15,726 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/openapi.json, QueryParams={}
+2025-07-01 23:49:15,731 - INFO - Response: Path=/openapi.json, Status=200
+2025-07-01 23:49:22,525 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/docs, QueryParams={}
+2025-07-01 23:49:22,525 - INFO - Response: Path=/docs, Status=200
+2025-07-01 23:49:23,479 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/openapi.json, QueryParams={}
+2025-07-01 23:49:23,480 - INFO - Response: Path=/openapi.json, Status=200
+2025-07-01 23:49:29,491 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/openapi.json, QueryParams={}
+2025-07-01 23:49:29,491 - INFO - Response: Path=/openapi.json, Status=200
+2025-07-01 23:51:12,078 - INFO - Request: IP=127.0.0.1, Method=POST, Path=/upload_csv/new, QueryParams={}
+2025-07-01 23:51:12,080 - INFO - Attempting to upload CSV to table: new
+2025-07-01 23:51:12,096 - INFO - Table `new` ensured to exist.
+2025-07-01 23:51:12,100 - INFO - Successfully inserted 3 rows into `new`.
+2025-07-01 23:51:12,101 - INFO - Response: Path=/upload_csv/new, Status=200
+2025-07-01 23:51:29,377 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/tables, QueryParams={}
+2025-07-01 23:51:29,379 - INFO - Listed tables: ['new']
+2025-07-01 23:51:29,379 - INFO - Response: Path=/tables, Status=200
+2025-07-01 23:51:42,693 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/data/new, QueryParams={}
+2025-07-01 23:51:42,694 - INFO - Retrieved 3 rows from table `new`.
+2025-07-01 23:51:42,695 - INFO - Response: Path=/data/new, Status=200
+2025-07-01 23:53:10,168 - INFO - Request: IP=127.0.0.1, Method=GET, Path=/data/new/query, QueryParams={'limit': '100', 'offset': '0', 'filters': 'city=Delhi,age=42'}
+2025-07-01 23:53:10,169 - INFO - Executing query: SELECT * FROM `new` WHERE `city` = ? AND `age` = ? LIMIT ? OFFSET ? with params: ['Delhi', '42', 100, 0]
+2025-07-01 23:53:10,169 - INFO - Retrieved 1 filtered rows from table `new`.
+2025-07-01 23:53:10,170 - INFO - Response: Path=/data/new/query, Status=200
