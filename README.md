@@ -1,18 +1,16 @@
 # ibee_technical_assignment
 
-Data Upload and Query API
-
+● Data Upload and Query API
 
 Simple backend system built with FastAPI that allows users to upload CSV files, validates the data, stores it in an SQLite database, and exposes REST API endpoints to query the stored data. All API activity is logged to a file.
 
 
-Features
+● Features
 CSV File Upload: Upload CSV files to dynamically named tables in an SQLite database.
 
 Data Validation: Basic validation for missing values and incorrect row lengths during CSV upload. Empty cells are stored as NULL.
 
 SQLite Database: Uses a file-based SQLite database (data.db) for data storage.
-
 
 REST API Endpoints:
 
@@ -29,7 +27,7 @@ API Activity Logging: Logs all API requests (method, path, client IP) and respon
 Automatic API Documentation (Swagger UI): Interactive API documentation is automatically generated and available at /docs.
 
 
-Technologies Used
+● Technologies Used
 
 Backend Framework: FastAPI (Python)
 
@@ -42,7 +40,7 @@ File Handling: python-multipart
 Data Processing: Standard Python csv module
 
 
-Setup and Installation
+● Setup and Installation
 
 Clone or Download the Project:
 If you have the main.py file, simply save it to a directory of your choice (e.g., my_api_project).
@@ -58,7 +56,7 @@ Windows:
 
 .\venv\Scripts\activate
 
-Install Dependencies:
+● Install Dependencies:
 Navigate to your project directory (where main.py is located) in your terminal and install the required packages:
 
 pip install fastapi uvicorn python-multipart
@@ -79,7 +77,7 @@ app: Refers to the FastAPI() instance named app inside main.py.
 
 
 
-Access the API Documentation:
+● Access the API Documentation:
 Once the server starts, open your web browser and go to:
 
 http://127.0.0.1:8000/docs
@@ -186,11 +184,11 @@ In the table_name field, enter my_data.
 
 In the filters input field, enter your desired filters as key=value pairs separated by commas.
 
-To filter by city: city=New York
+To filter by city: city=Delhi
 
-To filter by age: age=30
+To filter by age: age=42
 
-To combine filters: city=New York,age=30
+To combine filters: city=Delhi,age=42
 
 Optionally, adjust limit and offset.
 
