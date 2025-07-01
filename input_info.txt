@@ -1,0 +1,79 @@
+Here are the input examples for each parameter across your API endpoints, extracted for your convenience:
+
+
+1. POST /upload_csv/{table_name}
+table_name (Path Parameter)
+
+Input Examples:
+
+users
+
+products
+
+orders
+
+my_data
+
+Note: This name will be sanitized to be a valid SQL name.
+
+file (File Upload)
+
+Input: Select a .csv file from your local file system using the "Choose File" button in Swagger UI.
+
+
+2. GET /tables
+Parameters: None.
+
+
+3. GET /data/{table_name}
+table_name (Path Parameter)
+
+Input Examples:
+
+my_data
+
+orders
+
+Note: This must be the name of an existing table.
+
+
+4. GET /data/{table_name}/query
+table_name (Path Parameter)
+
+Input Examples:
+
+my_data
+
+orders
+
+Note: This must be the name of an existing table.
+
+limit (Query Parameter, Optional)
+
+Input Examples:
+
+10
+
+50
+
+100 (Default)
+
+offset (Query Parameter, Optional)
+
+Input Examples:
+
+0 (Default)
+
+10
+
+20
+
+filters (Query Parameter, Optional)
+
+Input Examples (comma-separated key=value pairs):
+
+city=Delhi
+
+age=42
+
+city=Delhi,age=42 (to combine filters)
