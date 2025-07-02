@@ -2,13 +2,32 @@ import sqlite3
 import csv
 import logging
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException, status, Request, Query
-from fastapi.responses import JSONResponse
+import json # Import json for parsing Gemini's structured response
+import requests # Import requests for making HTTP calls to Gemini API
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
+
+from fastapi import FastAPI, UploadFile, File, HTTPException, status, Request, Query, Depends
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+from passlib.context import CryptContext
 
 # --- Configuration ---
 DATABASE_FILE = "data.db"
 LOG_FILE = "api_activity.log"
+
+# --- Gemini API Configuration ---
+# IMPORTANT: Replace with your actual Gemini API Key.
+# You can get one from Google AI Studio: https://aistudio.google.com/app/apikey
+# For security, consider loading this from environment variables in production.
+GEMINI_API_KEY = "AIzaSyBJ3uPitYo0Jxz3QHRBnMPSWOF6QmzPYvg"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+
+# --- Authentication Configuration ---
+# SECRET_KEY = "your-super-secret-key" # No longer directly used for basic auth, but good to keep in mind for hashing
+# ALGORITHM = "HS256" # No longer used
+# ACCESS_TOKEN_EXPIRE_MINUTES = 30 # No longer used
 
 # --- Logging Setup ---
 # Configure logging to write to a file and also output to the console
@@ -24,10 +43,54 @@ logger = logging.getLogger(__name__) # Get a logger instance for this module
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
-    title="Data Upload and Query API",
-    description="A simple backend system to upload CSV data, validate it, store it in SQLite, and query it via REST API endpoints, with basic logging.",
+    title="Data Upload and Query API with HTTP Basic Authentication and AI Assistant",
+    description="A simple backend system to upload CSV data, validate it, store it in SQLite, and query it via REST API endpoints, with basic logging, HTTP Basic authentication, and an AI assistant.",
     version="1.0.0"
 )
+
+# --- Password Hashing Setup ---
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --- HTTP Basic Authentication Scheme ---
+http_basic_scheme = HTTPBasic() # For HTTP Basic Authentication
+
+# --- User Management (In-memory for demonstration) ---
+# In a real application, this would be stored in a database
+# Hashed passwords are used here
+USERS_DB = {
+    "testuser": {
+        "username": "testuser",
+        "hashed_password": pwd_context.hash("testpassword") # Hash a default password
+    },
+    "admin": {
+        "username": "admin",
+        "hashed_password": pwd_context.hash("adminpass") # Another default user
+    }
+}
+
+def verify_password(plain_password, hashed_password):
+    """Verifies a plain password against a hashed password."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_user(username: str):
+    """Retrieves a user from the in-memory database."""
+    if username in USERS_DB:
+        return USERS_DB[username]
+    return None
+
+async def get_current_active_user(credentials: HTTPBasicCredentials = Depends(http_basic_scheme)):
+    """
+    Dependency that authenticates using HTTP Basic Auth.
+    """
+    user = get_user(credentials.username)
+    if not user or not verify_password(credentials.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"}, # Challenge for Basic Auth
+        )
+    return user
+
 
 # --- Database Functions ---
 def get_db_connection():
@@ -104,15 +167,17 @@ def validate_csv_row(row: List[str], expected_columns: int) -> bool:
 
 # --- API Endpoints ---
 
-@app.post("/upload_csv/{table_name}", summary="Upload a CSV file and store its data")
-async def upload_csv(table_name: str, file: UploadFile = File(...)):
+@app.post("/upload_csv/{table_name}", summary="Upload a CSV file and store its data (HTTP Basic Auth)")
+async def upload_csv(table_name: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_active_user)):
     """
     Uploads a CSV file, validates its content, and stores it in a new or existing SQLite table.
-    The table name is derived from the path parameter.
+    Requires HTTP Basic authentication.
     
     - **table_name**: The desired name for the database table (will be sanitized).
     - **file**: The CSV file to upload.
     """
+    logger.info(f"Authenticated user '{current_user['username']}' attempting to upload CSV to table: {table_name}")
+
     # Check if the uploaded file has a .csv extension
     if not file.filename.endswith(".csv"):
         raise HTTPException(
@@ -213,12 +278,14 @@ async def upload_csv(table_name: str, file: UploadFile = File(...)):
         if conn:
             conn.close() # Ensure the database connection is closed
 
-@app.get("/tables", summary="List all available data tables")
-async def list_tables():
+@app.get("/tables", summary="List all available data tables (HTTP Basic Auth)")
+async def list_tables(current_user: dict = Depends(get_current_active_user)):
     """
     Retrieves a list of all tables currently stored in the database.
+    Requires HTTP Basic authentication.
     Excludes internal SQLite tables (those starting with 'sqlite_').
     """
+    logger.info(f"Authenticated user '{current_user['username']}' attempting to list tables.")
     conn = None # Initialize connection to None for finally block
     try:
         conn = get_db_connection() # Get a database connection
@@ -238,13 +305,15 @@ async def list_tables():
         if conn:
             conn.close() # Ensure the database connection is closed
 
-@app.get("/data/{table_name}", summary="Retrieve all data from a specific table")
-async def get_table_data(table_name: str):
+@app.get("/data/{table_name}", summary="Retrieve all data from a specific table (HTTP Basic Auth)")
+async def get_table_data(table_name: str, current_user: dict = Depends(get_current_active_user)):
     """
     Retrieves all data from the specified table.
+    Requires HTTP Basic authentication.
     
     - **table_name**: The name of the table to retrieve data from.
     """
+    logger.info(f"Authenticated user '{current_user['username']}' attempting to retrieve all data from table: {table_name}")
     sanitized_table_name = sanitize_table_name(table_name) # Sanitize the table name
     conn = None # Initialize connection to None for finally block
     try:
@@ -277,15 +346,17 @@ async def get_table_data(table_name: str):
         if conn:
             conn.close() # Ensure the database connection is closed
 
-@app.get("/data/{table_name}/query", summary="Query data from a table with filters")
+@app.get("/data/{table_name}/query", summary="Query data from a table with filters (HTTP Basic Auth)")
 async def query_table_data(
     table_name: str,
     limit: Optional[int] = 100, # Optional limit for the number of rows returned
     offset: Optional[int] = 0, # Optional offset for pagination
     filters_string: Optional[str] = Query(None, alias="filters", description="Comma-separated key=value pairs for filtering (e.g., category=Electronics,price=100)"), # Added for Swagger UI
+    current_user: dict = Depends(get_current_active_user) # Requires authentication
 ):
     """
     Queries data from the specified table with optional filters, limit, and offset.
+    Requires HTTP Basic authentication.
     Filters can be applied as key=value pairs in the 'filters' query parameter (e.g., category=Electronics,price=100)
     or as individual query parameters (e.g., /data/mytable/query?category=Electronics&price=100).
     
@@ -295,6 +366,7 @@ async def query_table_data(
     - **filters_string**: A comma-separated string of key=value pairs for filtering (e.g., `category=Electronics,price=100`).
     - **Any other query parameters**: Will also be treated as column=value filters.
     """
+    logger.info(f"Authenticated user '{current_user['username']}' attempting to query data from table: {table_name} with filters: {filters_string}")
     sanitized_table_name = sanitize_table_name(table_name) # Sanitize the table name
     conn = None # Initialize connection to None for finally block
     try:
@@ -320,10 +392,6 @@ async def query_table_data(
                 else:
                     logger.warning(f"Invalid filter format in filters_string: {pair}. Expected key=value.")
 
-        # Combine with any other dynamic query parameters (from the Request object, if needed in the future)
-        # For now, we'll primarily rely on filters_string for Swagger UI.
-        # If you were making direct API calls, you could still use individual query params.
-        
         # Iterate through the parsed filters
         for col, val in parsed_filters.items():
             sanitized_col = sanitize_table_name(col) # Sanitize the column name from the filter
@@ -361,13 +429,122 @@ async def query_table_data(
             detail=f"Table '{sanitized_table_name}' not found or inaccessible."
         )
     except Exception as e:
-        # Catch any other unexpected errors
-        logger.exception(f"Unexpected error querying data from {sanitized_table_name}: {e}")
+        logger.exception(f"An unexpected error occurred in AI assistant: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {e}"
+            detail=f"An unexpected error occurred while processing your request: {e}"
         )
     finally:
         if conn:
-            conn.close() # Ensure the database connection is closed
+            conn.close()
 
+# --- AI Assistant Endpoint ---
+@app.post("/ask_data_assistant", summary="Ask the AI assistant questions about your data (HTTP Basic Auth)")
+async def ask_data_assistant(
+    question: Optional[str] = None, # Made the question parameter optional
+    current_user: dict = Depends(get_current_active_user) # Requires authentication
+):
+    """
+    Asks the AI assistant a natural language question about the uploaded data.
+    The assistant will try to answer based on the schema and sample data from your tables.
+    
+    - **question**: The natural language question to ask (e.g., "How many products are in the Electronics category?"). This parameter is now optional.
+    """
+    logger.info(f"Authenticated user '{current_user['username']}' asking AI assistant: '{question}'")
+
+    if question is None or not question.strip():
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"answer": "Please provide a question for the AI assistant."}
+        )
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Get available tables
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        tables = [row["name"] for row in cursor.fetchall()]
+
+        if not tables:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"answer": "No data tables found. Please upload a CSV first."}
+            )
+
+        data_context = []
+        for table_name in tables:
+            # Get schema for each table
+            cursor.execute(f"PRAGMA table_info(`{table_name}`)")
+            schema = [{"name": col[1], "type": col[2]} for col in cursor.fetchall()]
+
+            # Get a few sample rows (e.g., first 5)
+            cursor.execute(f"SELECT * FROM `{table_name}` LIMIT 5")
+            sample_data = [dict(row) for row in cursor.fetchall()]
+
+            data_context.append({
+                "table_name": table_name,
+                "schema": schema,
+                "sample_data": sample_data
+            })
+
+        # Construct the prompt for the Gemini API
+        prompt = f"""
+        You are a helpful data analysis assistant. I have the following data tables in an SQLite database:
+
+        {json.dumps(data_context, indent=2)}
+
+        Based on this data context, please answer the following question:
+        "{question}"
+
+        If the question requires data aggregation or specific queries, suggest how that data could be retrieved from the tables.
+        If the question cannot be answered with the provided data, state that clearly.
+        """
+        
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}]
+                }
+            ]
+        }
+
+        # Make the fetch call to the Gemini API
+        # The API key is appended to the URL as per Canvas instructions
+        api_url_with_key = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
+        
+        logger.info(f"Sending request to Gemini API: {api_url_with_key}")
+        response = requests.post(api_url_with_key, headers=headers, json=payload)
+        response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+        
+        gemini_result = response.json()
+        
+        ai_response = "Could not get a clear answer from the AI assistant."
+        if gemini_result and gemini_result.get("candidates"):
+            first_candidate = gemini_result["candidates"][0]
+            if first_candidate.get("content") and first_candidate["content"].get("parts"):
+                ai_response = first_candidate["content"]["parts"][0].get("text", ai_response)
+
+        logger.info(f"AI Assistant response: {ai_response}")
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"answer": ai_response})
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error communicating with Gemini API: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error communicating with AI assistant: {e}"
+        )
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred in AI assistant: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while processing your request: {e}"
+        )
+    finally:
+        if conn:
+            conn.close()
